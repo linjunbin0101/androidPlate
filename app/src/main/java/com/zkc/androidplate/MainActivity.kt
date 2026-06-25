@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity() {
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Camera preview card with guide box
+                    // ── Preview area ──
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
@@ -121,47 +121,57 @@ class MainActivity : ComponentActivity() {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(4f / 3f)
+                                .aspectRatio(1f)
                                 .clip(RoundedCornerShape(16.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            // Camera preview
-                            CameraPreview(
-                                onFrame = { imageProxy -> analyzeFrame(imageProxy) },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            if (showCaptured && capturedBitmap != null) {
+                                // Show captured photo
+                                Image(
+                                    bitmap = capturedBitmap!!.asImageBitmap(),
+                                    contentDescription = "captured",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                // Live camera preview
+                                CameraPreview(
+                                    onFrame = { imageProxy -> analyzeFrame(imageProxy) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
 
-                            // Guide box overlay — plate-shaped green frame
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(0.78f)
-                                    .aspectRatio(3.5f)
-                                    .border(
-                                        BorderStroke(3.dp, Color(0xFF4CAF50)),
-                                        RoundedCornerShape(8.dp)
-                                    )
-                            )
+                                // Guide box overlay — plate-shaped green frame
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.78f)
+                                        .aspectRatio(3.5f)
+                                        .border(
+                                            BorderStroke(3.dp, Color(0xFF4CAF50)),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                )
 
-                            // Hint text below guide box
-                            Text(
-                                text = "将车牌对准框内",
-                                color = Color.White.copy(alpha = 0.6f),
-                                fontSize = 12.sp,
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 8.dp)
-                            )
+                                // Hint text below guide box
+                                Text(
+                                    text = "将车牌对准框内",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 8.dp)
+                                )
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Result display card
+                    // ── Result card ──
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (plateNumber.contains("等待") || plateNumber.contains("失败"))
+                            containerColor = if (plateNumber.contains("等待") || plateNumber.contains("失败") || plateNumber.contains("未识别"))
                                 Color(0xFF2A2A2A)
                             else
                                 Color(0xFF1B5E20)
@@ -175,7 +185,9 @@ class MainActivity : ComponentActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = if (plateNumber.contains("等待")) "识别中..." else "识别结果",
+                                text = if (plateNumber.contains("拍照")) "请先拍照"
+                                    else if (plateNumber.contains("识别中")) "识别中..."
+                                    else "识别结果",
                                 color = Color.White.copy(alpha = 0.6f),
                                 fontSize = 13.sp
                             )
@@ -187,6 +199,52 @@ class MainActivity : ComponentActivity() {
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // ── Action button ──
+                    if (showCaptured) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF2196F3))
+                                .clickable {
+                                    showCaptured = false
+                                    capturedBitmap = null
+                                    plateNumber = "等待拍照..."
+                                }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "重新拍照",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF2196F3))
+                                .clickable {
+                                    captureRequested = true
+                                    plateNumber = "识别中..."
+                                }
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "拍照识别",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -225,20 +283,26 @@ class MainActivity : ComponentActivity() {
         }
 
         try {
-            val bitmap = imageProxyToBitmap(imageProxy)
-            if (bitmap == null) {
-                imageProxy.close()
+            // Skip frames when not actively capturing
+            if (!captureRequested) {
                 return
             }
 
+            val bitmap = imageProxyToBitmap(imageProxy)
+            if (bitmap == null) {
+                captureRequested = false
+                return
+            }
+
+            // Save captured bitmap for display (copy to avoid reuse issues)
+            capturedBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+
+            // Scale down for recognition
             val scaledW = 640
             val scaledH = (bitmap.height.toFloat() / bitmap.width * scaledW).toInt().coerceAtLeast(1)
             val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
 
-            frameCount++
-            if (frameCount % 30 == 1) {
-                Log.i(TAG, "Frame #$frameCount src=${bitmap.width}x${bitmap.height} -> ${scaledW}x${scaledH} rot=${imageProxy.imageInfo.rotationDegrees}")
-            }
+            Log.i(TAG, "Capture src=${bitmap.width}x${bitmap.height} scaled=${scaledW}x${scaledH} rot=${imageProxy.imageInfo.rotationDegrees}")
 
             val plates = HyperLPR3.getInstance().plateRecognition(
                 scaledBitmap,
@@ -251,11 +315,20 @@ class MainActivity : ComponentActivity() {
                 if (code.isNotBlank()) {
                     plateNumber = code
                     Log.i(TAG, "Recognized: $code")
+                    showCaptured = true
+                    return
                 }
             }
+
+            // No plate detected
+            plateNumber = "未识别到车牌"
+            showCaptured = true
         } catch (e: Exception) {
             Log.e(TAG, "analyzeFrame error", e)
+            plateNumber = "识别出错"
+            showCaptured = true
         } finally {
+            captureRequested = false
             imageProxy.close()
         }
     }
