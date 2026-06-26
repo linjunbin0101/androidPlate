@@ -19,12 +19,12 @@ dependencyResolutionManagement {
 }
 ```
 
-### 2. 导入 AAR
+### 2. 添加依赖
 
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("com.zkc.plate:plate-sdk:1.0.0")
+    implementation("com.github.linjunbin0101:androidPlate:1.0.0")
 }
 ```
 
