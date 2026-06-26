@@ -1,2 +1,4 @@
 jdk:
   - openjdk17
+install:
+  - ./gradlew :plate-sdk:assembleRelease :plate-sdk:publishToMavenLocal
