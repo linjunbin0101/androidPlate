@@ -4,6 +4,7 @@ import android.Manifest
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.graphics.YuvImage
 import android.os.Bundle
@@ -195,9 +196,10 @@ class MainActivity : ComponentActivity() {
                             Text(
                                 text = plateNumber,
                                 color = Color.White,
-                                fontSize = 32.sp,
+                                fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
+                                lineHeight = 36.sp,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                         }
@@ -261,7 +263,7 @@ class MainActivity : ComponentActivity() {
         try {
             val parameter = HyperLPRParameter()
                 .setDetLevel(HyperLPR3.DETECT_LEVEL_HIGH)
-                .setMaxNum(1)
+                .setMaxNum(5)
                 .setRecConfidenceThreshold(0.7f)
             HyperLPR3.getInstance().init(this, parameter)
             isInitialized = true
@@ -294,27 +296,32 @@ class MainActivity : ComponentActivity() {
                 return
             }
 
-            // Save captured bitmap for display (copy to avoid reuse issues)
-            capturedBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+            val rotation = imageProxy.imageInfo.rotationDegrees
 
-            // Scale down for recognition
+            // Rotate bitmap to upright orientation so model always sees correct orientation
+            val uprightBitmap = if (rotation == 0) bitmap else rotateBitmap(bitmap, rotation)
+
+            // Save upright bitmap for display
+            capturedBitmap = uprightBitmap.copy(Bitmap.Config.ARGB_8888, false)
+
+            // Scale down for recognition (from upright image, no further rotation needed)
             val scaledW = 640
-            val scaledH = (bitmap.height.toFloat() / bitmap.width * scaledW).toInt().coerceAtLeast(1)
-            val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
+            val scaledH = (uprightBitmap.height.toFloat() / uprightBitmap.width * scaledW).toInt().coerceAtLeast(1)
+            val scaledBitmap = Bitmap.createScaledBitmap(uprightBitmap, scaledW, scaledH, true)
 
-            Log.i(TAG, "Capture src=${bitmap.width}x${bitmap.height} scaled=${scaledW}x${scaledH} rot=${imageProxy.imageInfo.rotationDegrees}")
+            Log.i(TAG, "Capture src=${bitmap.width}x${bitmap.height} rot=$rotation upright=${uprightBitmap.width}x${uprightBitmap.height}")
 
             val plates = HyperLPR3.getInstance().plateRecognition(
                 scaledBitmap,
-                imageProxy.imageInfo.rotationDegrees,
+                0,  // always 0 — bitmap already rotated to upright
                 HyperLPR3.STREAM_BGRA
             )
 
             if (plates.isNotEmpty()) {
-                val code = plates.first().code
-                if (code.isNotBlank()) {
-                    plateNumber = code
-                    Log.i(TAG, "Recognized: $code")
+                val codes = plates.map { it.code }.filter { it.isNotBlank() }
+                if (codes.isNotEmpty()) {
+                    plateNumber = codes.joinToString("\n")
+                    Log.i(TAG, "Recognized ${codes.size} plate(s): $codes")
                     showCaptured = true
                     return
                 }
@@ -331,6 +338,13 @@ class MainActivity : ComponentActivity() {
             captureRequested = false
             imageProxy.close()
         }
+    }
+
+    // Rotate bitmap to specified degrees (counter-clockwise: 90, 180, 270)
+    private fun rotateBitmap(bitmap: Bitmap, degrees: Int): Bitmap {
+        val matrix = Matrix()
+        matrix.postRotate(degrees.toFloat())
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
     // ──────────────────────────────────────────────
