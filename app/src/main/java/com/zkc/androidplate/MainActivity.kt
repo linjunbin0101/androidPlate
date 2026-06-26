@@ -53,8 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.hyperai.hyperlpr3.HyperLPR3
-import com.hyperai.hyperlpr3.bean.HyperLPRParameter
+import com.zkc.plate.PlateRecognizer
 import com.zkc.androidplate.ui.theme.AndroidPlateTheme
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
@@ -261,13 +260,9 @@ class MainActivity : ComponentActivity() {
 
     private fun initHyperLPR() {
         try {
-            val parameter = HyperLPRParameter()
-                .setDetLevel(HyperLPR3.DETECT_LEVEL_HIGH)
-                .setMaxNum(5)
-                .setRecConfidenceThreshold(0.7f)
-            HyperLPR3.getInstance().init(this, parameter)
+            PlateRecognizer.init(this)
             isInitialized = true
-            Log.i(TAG, "HyperLPR3 initialized")
+            Log.i(TAG, "PlateRecognizer initialized")
         } catch (e: Exception) {
             Log.e(TAG, "initHyperLPR failed", e)
             plateNumber = "初始化失败"
@@ -304,27 +299,14 @@ class MainActivity : ComponentActivity() {
             // Save upright bitmap for display
             capturedBitmap = uprightBitmap.copy(Bitmap.Config.ARGB_8888, false)
 
-            // Scale down for recognition (from upright image, no further rotation needed)
-            val scaledW = 640
-            val scaledH = (uprightBitmap.height.toFloat() / uprightBitmap.width * scaledW).toInt().coerceAtLeast(1)
-            val scaledBitmap = Bitmap.createScaledBitmap(uprightBitmap, scaledW, scaledH, true)
+            Log.i(TAG, "Capture src=${bitmap.width}x${bitmap.height} rot=$rotation")
 
-            Log.i(TAG, "Capture src=${bitmap.width}x${bitmap.height} rot=$rotation upright=${uprightBitmap.width}x${uprightBitmap.height}")
-
-            val plates = HyperLPR3.getInstance().plateRecognition(
-                scaledBitmap,
-                0,  // always 0 — bitmap already rotated to upright
-                HyperLPR3.STREAM_BGRA
-            )
-
-            if (plates.isNotEmpty()) {
-                val codes = plates.map { it.code }.filter { it.isNotBlank() }
-                if (codes.isNotEmpty()) {
-                    plateNumber = codes.joinToString("\n")
-                    Log.i(TAG, "Recognized ${codes.size} plate(s): $codes")
-                    showCaptured = true
-                    return
-                }
+            val codes = PlateRecognizer.getInstance().recognize(uprightBitmap)
+            if (codes.isNotEmpty()) {
+                plateNumber = codes.joinToString("\n")
+                Log.i(TAG, "Recognized ${codes.size} plate(s): $codes")
+                showCaptured = true
+                return
             }
 
             // No plate detected

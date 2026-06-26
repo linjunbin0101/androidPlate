@@ -51,6 +51,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":plate-sdk"))
+
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -65,9 +67,6 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
-
-    // HyperLPR3 - Chinese license plate recognition SDK
-    implementation("com.github.HyperInspire:hyperlpr3-android-sdk:1.0.3")
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

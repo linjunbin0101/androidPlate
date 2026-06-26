@@ -25,4 +25,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "androidPlate"
 include(":app")
+include(":plate-sdk")
  
