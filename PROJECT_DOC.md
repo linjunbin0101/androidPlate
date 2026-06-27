@@ -15,6 +15,7 @@
 | **AGP**      | 9.2.1                             |
 | **Kotlin**   | 2.2.10                            |
 | **Compose**  | BOM 2026.02.01                    |
+| **版本号**   | `1.0.0` (versionCode 100)        |
 
 ---
 
@@ -32,11 +33,8 @@ f:\TEMP\androidPlate/
 │   │   │   │       ├── Theme.kt             # Material3 主题配置
 │   │   │   │       └── Type.kt              # 字体排版定义
 │   │   │   ├── res/                          # 资源文件（图标、字符串、主题、manifest）
-│   │   │   ├── keepRules/rules.keep          # ProGuard 规则
 │   │   │   └── AndroidManifest.xml
-│   │   ├── test/                             # 单元测试
-│   │   └── androidTest/                      # 仪器化测试
-│   └── build.gradle.kts                      # 模块构建配置
+│   │   └── build.gradle.kts                  # 模块构建配置
 ├── gradle/
 │   ├── wrapper/
 │   │   ├── gradle-wrapper.jar
@@ -97,7 +95,7 @@ PlateRecognizer.recognize() → 返回识别到的车牌号码列表
   - `PlateRecognizer.init(context)` — 初始化（加载模型）
   - `PlateRecognizer.getInstance()` — 获取单例
   - `.recognize(bitmap)` — 识别车牌，返回 `List<String>`
-- 模型文件存放于 `kmodels/` 目录
+- 模型文件由 SDK 内部管理加载
 
 ---
 
@@ -134,19 +132,18 @@ ImageAnalysis 捕获下一帧
 
 ## 当前构建状态
 
-项目已成功清理了之前的构建日志文件，当前代码状况：
+当前代码状况：
 
 - ☑ Gradle 配置完整（版本目录 + 签名 + JVM 参数）
 - ☑ 所有依赖声明正确（未见未解析引用）
 - ☑ 代码语法正确、逻辑完整
-- ☑ 签名文件已存在并用 release 签名配置
+- ☑ 签名文件已存在，签名密码与包名统一为 `androidplate`
 - ⬜ 尚未执行实际构建验证
 
 ---
 
 ## 注意事项
 
-1. **首次构建**：由于依赖了 JitPack 上的 `plate-sdk`，需要确保网络可访问 JitPack，首次构建会下载模型文件和 SDK
-2. **模型文件**：`kmodel/` 目录下的 `.kmodel` 文件是车牌识别必需的，需随 APK 打包
-3. **权限**：应用需要 `CAMERA` 权限（必需）以及 `READ/WRITE_EXTERNAL_STORAGE`（仅 Android 12 以下）
-4. **签名**：`androidplate.jks` 使用密码 `comzkcplate`，debug 和 release 均使用同一签名
+1. **首次构建**：由于依赖了 JitPack 上的 `plate-sdk`，需要确保网络可访问 JitPack
+2. **权限**：应用需要 `CAMERA` 权限（必需）以及 `READ/WRITE_EXTERNAL_STORAGE`（仅 Android 12 以下）
+3. **签名**：`androidplate.jks` 密码 `androidplate`，debug 和 release 均使用同一签名

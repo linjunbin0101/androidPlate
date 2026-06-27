@@ -15,8 +15,8 @@ android {
         applicationId = "com.zkc.androidplate"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 100
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -24,9 +24,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../androidplate.jks")
-            storePassword = "comzkcplate"
-            keyAlias = "comzkcplate"
-            keyPassword = "comzkcplate"
+            storePassword = "androidplate"
+            keyAlias = "androidplate"
+            keyPassword = "androidplate"
         }
     }
 
