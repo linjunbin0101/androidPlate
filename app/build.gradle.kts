@@ -51,7 +51,7 @@ android {
 }
 
 dependencies {
-    implementation("com.github.linjunbin0101:plate-sdk:1.0.0")
+    implementation("com.github.linjunbin0101:plate-sdk:1.0.1")
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

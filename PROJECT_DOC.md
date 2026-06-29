@@ -82,19 +82,24 @@ yuv420888ToNv21() → 手动转为 NV21 字节数组
 imageProxyToBitmap() → YuvImage → JPEG → BitmapFactory → Bitmap
     │
     ▼
-rotateBitmap() → 根据摄像头旋转角度矫正方向
+rotateBitmap() → 根据摄像头旋转角度矫正方向（仅用于预览显示）
     │
     ▼
-PlateRecognizer.recognize() → 返回识别到的车牌号码列表
+PlateRecognizer.recognize() → 返回 List<PlateResult>（含车牌号、置信度、类型、坐标）
 ```
 
 ### 车牌识别
 
-- 使用 **`com.github.linjunbin0101:plate-sdk:1.0.0`**（JitPack）
+- 使用 **`com.github.linjunbin0101:plate-sdk:1.0.1`**（JitPack）
 - 关键类：`com.zkc.plate.PlateRecognizer`
-  - `PlateRecognizer.init(context)` — 初始化（加载模型）
+  - `PlateRecognizer.init(context, config)` — 初始化（加载模型），支持 `PlateConfig` 配置
   - `PlateRecognizer.getInstance()` — 获取单例
-  - `.recognize(bitmap)` — 识别车牌，返回 `List<String>`
+  - `.recognize(bitmap)` — 识别车牌，返回 `List<PlateResult>`
+    - `PlateResult.number` — 车牌号（如 "粤A12345"）
+    - `PlateResult.confidence` — 置信度（0.0 ~ 1.0）
+    - `PlateResult.type` — 车牌类型编码
+    - `PlateResult.x1, y1, x2, y2` — 车牌矩形框坐标
+- SDK 默认启用旋转重试（`enableRotationRetry = true`），传入任意方向 bitmap 均可识别
 - 模型文件由 SDK 内部管理加载
 
 ---

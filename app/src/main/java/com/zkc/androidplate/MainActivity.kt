@@ -3,9 +3,11 @@ package com.zkc.androidplate
 import android.Manifest
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.ImageFormat
-import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.Typeface
 import android.graphics.YuvImage
 import android.os.Bundle
 import android.util.Log
@@ -53,7 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.zkc.plate.PlateConfig
 import com.zkc.plate.PlateRecognizer
+import com.zkc.plate.PlateResult
 import com.zkc.androidplate.ui.theme.AndroidPlateTheme
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
@@ -64,7 +68,6 @@ class MainActivity : ComponentActivity() {
         private const val TAG = "PlateRecog"
     }
 
-    private var plateNumber by mutableStateOf("等待拍照...")
     private var isInitialized = false
     private var frameCount = 0
     private var showCaptured by mutableStateOf(false)
@@ -166,46 +169,6 @@ class MainActivity : ComponentActivity() {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // ── Result card ──
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (plateNumber.contains("等待") || plateNumber.contains("失败") || plateNumber.contains("未识别"))
-                                Color(0xFF2A2A2A)
-                            else
-                                Color(0xFF1B5E20)
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = if (plateNumber.contains("拍照")) "请先拍照"
-                                    else if (plateNumber.contains("识别中")) "识别中..."
-                                    else "识别结果",
-                                color = Color.White.copy(alpha = 0.6f),
-                                fontSize = 13.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = plateNumber,
-                                color = Color.White,
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                lineHeight = 36.sp,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
                     // ── Action button ──
                     if (showCaptured) {
                         Box(
@@ -216,7 +179,6 @@ class MainActivity : ComponentActivity() {
                                 .clickable {
                                     showCaptured = false
                                     capturedBitmap = null
-                                    plateNumber = "等待拍照..."
                                 }
                                 .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
@@ -224,6 +186,23 @@ class MainActivity : ComponentActivity() {
                             Text(
                                 "重新拍照",
                                 color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else if (captureRequested) {
+                        // Recognizing... (button disabled)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF555555))
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "识别中...",
+                                color = Color.White.copy(alpha = 0.7f),
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -236,7 +215,6 @@ class MainActivity : ComponentActivity() {
                                 .background(Color(0xFF2196F3))
                                 .clickable {
                                     captureRequested = true
-                                    plateNumber = "识别中..."
                                 }
                                 .padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center
@@ -260,12 +238,15 @@ class MainActivity : ComponentActivity() {
 
     private fun initHyperLPR() {
         try {
-            PlateRecognizer.init(this)
+            PlateRecognizer.init(this, PlateConfig(
+                maxPlates = 1,
+                confidenceThreshold = 0.7f,
+                enableRotationRetry = true,
+            ))
             isInitialized = true
             Log.i(TAG, "PlateRecognizer initialized")
         } catch (e: Exception) {
             Log.e(TAG, "initHyperLPR failed", e)
-            plateNumber = "初始化失败"
         }
     }
 
@@ -291,30 +272,21 @@ class MainActivity : ComponentActivity() {
                 return
             }
 
-            val rotation = imageProxy.imageInfo.rotationDegrees
+            Log.i(TAG, "Capture src=${bitmap.width}x${bitmap.height}")
 
-            // Rotate bitmap to upright orientation so model always sees correct orientation
-            val uprightBitmap = if (rotation == 0) bitmap else rotateBitmap(bitmap, rotation)
-
-            // Save upright bitmap for display
-            capturedBitmap = uprightBitmap.copy(Bitmap.Config.ARGB_8888, false)
-
-            Log.i(TAG, "Capture src=${bitmap.width}x${bitmap.height} rot=$rotation")
-
-            val codes = PlateRecognizer.getInstance().recognize(uprightBitmap)
-            if (codes.isNotEmpty()) {
-                plateNumber = codes.joinToString("\n")
-                Log.i(TAG, "Recognized ${codes.size} plate(s): $codes")
-                showCaptured = true
-                return
+            val plates = PlateRecognizer.getInstance().recognize(bitmap)
+            val resultBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+            if (plates.isNotEmpty()) {
+                drawPlateOverlay(resultBitmap, plates)
+                Log.i(TAG, "Recognized ${plates.size} plate(s): ${plates.map { "${it.number}@${it.confidence}" }}")
+            } else {
+                drawInfoText(resultBitmap, "未识别到车牌")
             }
-
-            // No plate detected
-            plateNumber = "未识别到车牌"
+            capturedBitmap = resultBitmap
             showCaptured = true
         } catch (e: Exception) {
             Log.e(TAG, "analyzeFrame error", e)
-            plateNumber = "识别出错"
+            capturedBitmap?.let { drawInfoText(it, "识别出错") }
             showCaptured = true
         } finally {
             captureRequested = false
@@ -322,11 +294,80 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Rotate bitmap to specified degrees (counter-clockwise: 90, 180, 270)
-    private fun rotateBitmap(bitmap: Bitmap, degrees: Int): Bitmap {
-        val matrix = Matrix()
-        matrix.postRotate(degrees.toFloat())
-        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    // Draw plate bounding boxes + labels on bitmap
+    private fun drawPlateOverlay(bitmap: Bitmap, plates: List<PlateResult>) {
+        val canvas = Canvas(bitmap)
+        val sw = bitmap.width.toFloat()
+        val boxStroke = (sw / 100f).coerceAtLeast(4f)
+
+        plates.forEach { plate ->
+            // Bounding box
+            val boxPaint = Paint().apply {
+                color = android.graphics.Color.RED
+                style = Paint.Style.STROKE
+                strokeWidth = boxStroke
+                isAntiAlias = true
+            }
+            val x1 = plate.x1.coerceIn(0f, sw)
+            val y1 = plate.y1.coerceIn(0f, bitmap.height.toFloat())
+            val x2 = plate.x2.coerceIn(0f, sw)
+            val y2 = plate.y2.coerceIn(0f, bitmap.height.toFloat())
+            canvas.drawRect(x1, y1, x2, y2, boxPaint)
+
+            // Label text
+            val label = buildString {
+                append(plate.number)
+                if (plate.confidence < 0.8f) {
+                    append("  ${(plate.confidence * 100).toInt()}%")
+                }
+            }
+            val ts = (sw / 18f).coerceIn(24f, 64f)
+            val textPaint = Paint().apply {
+                color = android.graphics.Color.WHITE
+                textSize = ts
+                isAntiAlias = true
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            val tw = textPaint.measureText(label)
+            val th = textPaint.textSize
+            val pad = 8f
+
+            // Background behind label — place above box if possible, else below
+            val bgTop = if (y1 > th + pad) y1 - th - pad else y2 + pad
+            val bgBottom = bgTop + th + pad
+            val bgPaint = Paint().apply {
+                color = android.graphics.Color.argb(200, 211, 47, 47) // red-700 semi-transparent
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
+            canvas.drawRect(x1, bgTop, x1 + tw + pad * 2, bgBottom, bgPaint)
+            canvas.drawText(label, x1 + pad, bgBottom - pad, textPaint)
+        }
+    }
+
+    // Draw centered info text on bitmap (for no-result / error)
+    private fun drawInfoText(bitmap: Bitmap, text: String) {
+        val canvas = Canvas(bitmap)
+        val ts = (bitmap.width / 12f).coerceIn(28f, 56f)
+        val paint = Paint().apply {
+            color = android.graphics.Color.argb(200, 255, 255, 255)
+            textSize = ts
+            isAntiAlias = true
+            typeface = Typeface.DEFAULT_BOLD
+            textAlign = Paint.Align.CENTER
+        }
+        val bgPaint = Paint().apply {
+            color = android.graphics.Color.argb(120, 0, 0, 0)
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+        val tw = paint.measureText(text)
+        val th = paint.textSize
+        val cx = bitmap.width / 2f
+        val cy = bitmap.height / 2f
+        val pad = 16f
+        canvas.drawRect(cx - tw / 2 - pad, cy - th / 2 - pad, cx + tw / 2 + pad, cy + th / 2 + pad, bgPaint)
+        canvas.drawText(text, cx, cy + th / 3, paint)
     }
 
     // ──────────────────────────────────────────────
